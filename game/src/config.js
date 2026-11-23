@@ -1,95 +1,85 @@
-// SOLMAR — configuration, tuning numbers, palette and names. Everything here is original:
-// a fictional sun-soaked coastal city, its own people, cars and story.
-var S = null; // the live game state, created by main.js
-
-var CFG = {
-  // City geometry (1 unit = 1 metre). A 9x9 grid of blocks split by roads.
-  PITCH: 74,          // distance between neighbouring road centrelines
-  ROAD_W: 14,         // road width
-  BLOCK: 60,          // block width
-  ROADS: 10,          // roads per axis (centrelines from -333 to +333)
-  HALF: 340,          // city half-extent; the beach runs south of it
-  BEACH_Z: 340,       // where the sand starts
-  SEA_Z: 430,         // where the water starts
-  WORLD_R: 520,       // soft boundary for the player
-
-  STEP: 1 / 60,       // fixed simulation step
-  DAY_LENGTH: 480,    // seconds of real play per in-game day
-  START_HOUR: 16.5,   // golden-hour start: long sun, warm light
-
-  // On-foot movement
-  WALK_SPEED: 6,
-  RUN_SPEED: 10.5,
-  PLAYER_RADIUS: 0.55,
-
-  // Driving (arcade, metres / seconds)
-  CAR_ACCEL: 15,
-  CAR_BRAKE: 26,
-  CAR_REVERSE: 13,
-  CAR_MAX: 38,
-  CAR_SPORT_MAX: 47,
-  CAR_DRAG: 0.55,     // per-second speed loss factor
-  CAR_STEER: 0.62,    // radians of heading change per second at full lock, scaled by speed
-  CAR_RADIUS: 1.5,
-
-  // Population
-  TRAFFIC_CARS: 26,
-  PEDS: 52,
-  MAX_POLICE: 6,
-
-  // Combat
-  PISTOL_DAMAGE: 34,
-  PISTOL_RANGE: 55,
-  PUNCH_DAMAGE: 25,
-  PUNCH_RANGE: 2.2,
-  ENEMY_HEALTH: 100,
-  PLAYER_MAX_HEALTH: 100,
-  AMMO_START: 36,
-
-  // Wanted
-  WANTED_MAX: 5,
-  WANTED_DECAY_SECONDS: 9, // quiet seconds per star lost
-
-  // Economy
-  COIN_VALUE: 25,
-  COINS_TOTAL: 20,
-  TAXI_FARE_MIN: 40,
-  TAXI_FARE_MAX: 90,
-
-  SAVE_KEY: 'solmar.save.v1',
+// SOLMAR — Streets of Gold: shared constants for the whole game.
+// A sun-soaked coastal city, 9x9 blocks, built fresh for the gta6-01 bounty.
+export const CITY = {
+  blocks: 9,          // blocks per side
+  blockSize: 34,      // metres per block incl. road
+  roadWidth: 10,
+  half: 153,          // half-extent of the drivable city (9*34/2)
+  seaZ: -190,         // beach / sea edge on the -Z side
 };
 
-// The city, its districts and its people. All names are invented for this game.
-var NAMES = {
-  CITY: 'Solmar',
-  GAME_TITLE: 'SOLMAR',
-  GAME_SUBTITLE: 'Streets of Gold — an open-world crime story',
-  HERO: 'Marco Reyes',
-  FIXER: 'Nadia Sol',
-  CREW: 'the Harbor Crew',
-  DISTRICTS: ['Old Harbor', 'Palm Row', 'Civic Center', 'The Docks', 'Sunset Strip', 'Marina Bay'],
-  CAR_MODELS: ['Comet', 'Stallion', 'Prowler', 'Dune Buggy', 'Civic', 'Vulture', 'Sunbeam', 'Rhino'],
-  MISSION_NAMES: [
-    'First Fare',
-    'Hot Wheels',
-    'Package Run',
-    'Heat',
-    'The Getaway',
-    'Solmar Nights',
-  ],
+export const PLAYER = {
+  walkSpeed: 6,
+  runSpeed: 11,
+  radius: 0.55,
+  health: 100,
+  punchDamage: 12,
+  punchRange: 2.1,
+  punchCooldown: 0.45,
 };
 
-var PALETTE = {
+export const CAR = {
+  accel: 22,
+  brake: 34,
+  reverse: 12,
+  maxSpeed: 38,
+  maxReverse: 12,
+  steer: 1.9,
+  grip: 6.5,
+};
+
+export const COMBAT = {
+  pistolDamage: 34,
+  pistolRange: 70,
+  pistolCooldown: 0.28,
+  pistolAmmoStart: 24,
+  pistolAmmoMax: 120,
+  gangHealth: 60,
+  policeHealth: 50,
+};
+
+export const WANTED = {
+  maxStars: 5,
+  decayDelay: 6,      // seconds unseen before a star decays
+  finePerStar: 150,
+  hospitalFee: 200,
+};
+
+export const MISSION_REWARDS = [400, 650, 800, 900, 1200, 2000];
+export const TAXI_FARE = 120;
+export const COIN_VALUE = 50;
+export const COIN_COUNT = 20;
+
+export const DAY_LENGTH = 480; // seconds per full in-game day
+export const STEP = 1 / 60;
+
+export const SAVE_KEY = 'solmar-save-v1';
+export const BEST_KEY = 'solmar-best-v1';
+
+export const PALETTE = {
   skyDay: 0x87bfe8,
-  skyDusk: 0xff9e5e,
+  skyDusk: 0xff9a5c,
   skyNight: 0x0b1026,
-  sunDay: 0xfff2d8,
-  sunDusk: 0xffb36b,
-  fogDay: 0xa8c8e0,
-  ground: 0x9aa08a,
-  sidewalk: 0xb8b0a0,
-  road: 0x3a3d44,
+  sun: 0xffe9b0,
+  road: 0x2e3138,
+  sidewalk: 0x9aa0a3,
   sand: 0xe8d29a,
-  sea: 0x2e7fa8,
-  buildingGlass: 0x8fb8cc,
+  sea: 0x1e7fa8,
+  grass: 0x4f9e4d,
+  plaza: 0xcbb28a,
 };
+
+export const CAR_COLORS = [
+  0xc0392b, 0x2e86c1, 0xf1c40f, 0x27ae60, 0x8e44ad, 0xe67e22,
+  0xecf0f1, 0x1a1a1a, 0x7f8c8d, 0x16a085, 0xd35400, 0x2c3e50,
+];
+
+export const CAR_NAMES = [
+  'Cometa', 'Vuelo GT', 'Brisa', 'Toro', 'Marlin', 'Solstice',
+  'Cascabel', 'Puma S', 'Ola', 'Faro', 'Duna', 'Coral',
+];
+
+export const PED_SHIRTS = [
+  0xe74c3c, 0x3498db, 0xf39c12, 0x2ecc71, 0x9b59b6,
+  0x1abc9c, 0xe67e22, 0xecf0f1, 0xfd79a8, 0x00cec9,
+];

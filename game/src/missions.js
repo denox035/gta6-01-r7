@@ -1,259 +1,227 @@
-// The story of Solmar: six missions for Marco Reyes and his fixer Nadia Sol.
-// Each mission is a list of objectives (go somewhere, get in a car, collect,
-// lose the cops, survive a shootout). Completing one pays cash, saves the game
-// and opens the next. All characters, places and dialogue are original.
-var Missions = (function () {
-  var scene = null;
-  var defs = [];
-  var marker = null;
-  var packages = [];
-  var betweenTimer = 0;
-  var current = null;
+// Missions & story: six jobs for Marco Reyes and fixer Nadia Sol, plus the
+// taxi side job. Each mission has dialogue, a beacon target, a reward and an
+// auto-save on completion. Progression checks live in updateMission().
+import { MISSION_REWARDS, TAXI_FARE } from './config.js';
+import { dist2 } from './random.js';
 
-  function def(name, intro, reward, steps) {
-    return { name: name, intro: intro, reward: reward, steps: steps };
-  }
+export const MISSIONS = [
+  {
+    title: 'First Fare',
+    subtitle: 'Marco needs a driver who shows up',
+    giver: 'Marco Reyes',
+    intro: 'Marco: "Solmar runs on wheels, kid. Take my cab, pick up the fare at the plaza, drop them at the beach. Easy money."',
+    outro: 'Marco: "Not bad. The city noticed you. Come back when you want real work."',
+    target: { x: 0, z: 20, label: 'Plaza pickup' },
+    target2: { x: -60, z: -160, label: 'Beach drop-off' },
+    reward: MISSION_REWARDS[0],
+  },
+  {
+    title: 'Borrowed Wheels',
+    subtitle: 'Nadia wants a car nobody will miss',
+    giver: 'Nadia Sol',
+    intro: 'Nadia: "A client needs a Cometa, no questions. Walk up to any parked car on the street, take it, and bring it to the docks. Quietly."',
+    outro: 'Nadia: "Clean. The client pays clean. You are on my list now."',
+    target: { x: 120, z: 140, label: 'Deliver to the docks' },
+    reward: MISSION_REWARDS[1],
+  },
+  {
+    title: 'Package Run',
+    subtitle: 'One box, no peeking, no cops',
+    giver: 'Nadia Sol',
+    intro: 'Nadia: "A package is waiting at the container docks. Grab it, then run it to the park before the sun drops. Do not open it."',
+    outro: 'Nadia: "Delivered. Whoever that box was for, they are happy. So am I."',
+    target: { x: 120, z: 150, label: 'Pick up the package' },
+    target2: { x: -120, z: -110, label: 'Deliver to the park' },
+    reward: MISSION_REWARDS[2],
+  },
+  {
+    title: 'Lose the Heat',
+    subtitle: 'The whole precinct is looking for you',
+    giver: 'Marco Reyes',
+    intro: 'Marco: "You stirred the nest, kid. Get the cops off your tail and stay out of sight until the heat dies. Do not get busted."',
+    outro: 'Marco: "Ghost. That is how you survive in Solmar."',
+    reward: MISSION_REWARDS[3],
+  },
+  {
+    title: 'Getaway Driver',
+    subtitle: 'Three checkpoints, one very fast car',
+    giver: 'Nadia Sol',
+    intro: 'Nadia: "My crew hits the marina vault at dusk. You drive. Three checkpoints across the city, then vanish. Fast is not fast enough — be faster."',
+    outro: 'Nadia: "The crew is out and the vault is empty. You drive like the city owes you money."',
+    checkpoints: [
+      { x: -120, z: 20, label: 'Checkpoint 1 — West End' },
+      { x: 0, z: 150, label: 'Checkpoint 2 — South Gate' },
+      { x: 120, z: -80, label: 'Checkpoint 3 — Marina' },
+    ],
+    reward: MISSION_REWARDS[4],
+  },
+  {
+    title: 'Night Shootout',
+    subtitle: 'The Vipers took the docks. Take them back.',
+    giver: 'Marco Reyes',
+    intro: 'Marco: "The Vipers moved on our docks at nightfall. Four of them, armed. End it, and Solmar is ours again."',
+    outro: 'Marco: "The docks are ours. Solmar is ours. You did that, kid."',
+    target: { x: 120, z: 150, label: 'Clear the docks' },
+    reward: MISSION_REWARDS[5],
+  },
+];
 
-  function buildDefs() {
-    defs = [
-      def('First Fare',
-        [['Nadia Sol', 'Marco! The Harbor Crew needs a driver tonight. Meet me at the plaza fountain.'],
-         ['Nadia Sol', 'Take the blue Comet by the avenue and drop the package at the east side marker. Drive careful — the city watches.']],
-        150, [
-          { type: 'goto', x: 0, z: 24, r: 5, text: 'Meet Nadia Sol at the plaza fountain' },
-          { type: 'enterCar', carId: 'blue', text: 'Get in the blue Comet' },
-          { type: 'driveTo', x: 222, z: -148, r: 7, text: 'Drive to the drop-off on the east side' },
-        ]),
-      def('Hot Wheels',
-        [['Nadia Sol', 'A purple Stallion is sitting in the lot on Palm Row. The owner owes us. Bring it to the docks.'],
-         ['Nadia Sol', 'The lockup pays well for clean sports cars. Don\'t let the cops see you take it.']],
-        300, [
-          { type: 'goto', x: -222, z: -148, r: 8, text: 'Go to the parking lot on Palm Row' },
-          { type: 'enterCar', carId: 'lot-sport', text: 'Take the purple Stallion', wanted: 1 },
-          { type: 'driveTo', x: 296, z: 296, r: 8, text: 'Deliver the Stallion to the docks lockup' },
-        ]),
-      def('Package Run',
-        [['Nadia Sol', 'Three packages stashed around Civic Center. On foot this time — cars draw eyes.'],
-         ['Nadia Sol', 'Grab all three, then come back to me.']],
-        250, [
-          { type: 'collect', spots: [[148, 0], [-148, 0], [0, 148]], r: 3, text: 'Collect the packages (0/3)' },
-          { type: 'goto', x: 0, z: 24, r: 5, text: 'Return to Nadia at the plaza' },
-        ]),
-      def('Heat',
-        [['Nadia Sol', 'Somebody talked. The Solmar PD is all over you — two stars, Marco. Lose them.'],
-         ['Nadia Sol', 'Break line of sight, keep moving, and the heat cools off on its own.']],
-        400, [
-          { type: 'escape', text: 'Lose the cops — get your wanted level to zero' },
-        ]),
-      def('The Getaway',
-        [['Nadia Sol', 'Change of plan: I\'m riding with you. Take my teal Sunbeam and get us to the docks.'],
-         ['Nadia Sol', 'Three stars and counting. Drive like the whole city is behind you — because it is.']],
-        600, [
-          { type: 'enterCar', carId: 'teal', text: 'Get in Nadia\'s teal Sunbeam', wanted: 3 },
-          { type: 'driveTo', x: 296, z: 296, r: 8, text: 'Reach the docks — lose the cops if you can' },
-        ]),
-      def('Solmar Nights',
-        [['Nadia Sol', 'The Vulture gang moved on our warehouse tonight. Four of them. End it, Marco.'],
-         ['Nadia Sol', 'After that, the safehouse on Sunset Strip is yours. Welcome to the top of Solmar.']],
-        1000, [
-          { type: 'goto', x: -259, z: -259, r: 10, text: 'Go to the warehouse in the north-west', night: true },
-          { type: 'shootout', text: 'Clear out the Vulture gang (0/4)' },
-          { type: 'driveTo', x: 111, z: 111, r: 7, text: 'Drive to the safehouse on Sunset Strip' },
-        ]),
-    ];
-  }
-
-  function init(sc) {
-    scene = sc;
-    buildDefs();
-    S.mission = { index: 0, step: 0, running: false, done: false, between: false };
-  }
-
-  function setMarker(x, z, color) {
-    clearMarker();
-    marker = Entities.makeMarkerMesh(color || 0xffd23e);
-    marker.position.set(x, 0, z);
-    scene.add(marker);
-    S.missionTarget = { x: x, z: z };
-  }
-  function clearMarker() {
-    if (marker) { scene.remove(marker); marker = null; }
-    S.missionTarget = null;
-  }
-
-  function currentDef() { return defs[S.mission.index]; }
-  function currentStep() {
-    var d = currentDef();
-    return d ? d.steps[S.mission.step] : null;
-  }
-
-  function startMission(i) {
-    S.mission.index = i;
-    S.mission.step = 0;
-    S.mission.running = true;
-    S.mission.between = false;
-    var d = currentDef();
-    HUD.banner('MISSION: ' + d.name, d.steps[0].text);
-    showIntro(d);
-    setupStep();
-    HUD.toast('Mission started: ' + d.name, 'info');
-  }
-
-  function showIntro(d) {
-    d.intro.forEach(function (line, i) {
-      setTimeout(function () { HUD.dialogue(line[0], line[1]); }, i * 3600);
-    });
-  }
-
-  function setupStep() {
-    var step = currentStep();
-    if (!step) return;
-    HUD.setObjective(step.text);
-    clearPackages();
-    if (step.type === 'goto' || step.type === 'driveTo') setMarker(step.x, step.z);
-    else if (step.type === 'enterCar') {
-      var car = S.cars.find(function (c) { return c.id === step.carId; });
-      if (car) setMarker(car.x, car.z, 0x2ce8c8);
-    } else if (step.type === 'collect') {
-      step.spots.forEach(function (s) { spawnPackage(s[0], s[1]); });
-      step.got = 0;
-      setMarker(step.spots[0][0], step.spots[0][1]);
-    } else if (step.type === 'escape') {
-      if (S.wanted < 2) World.addWanted(2, 'Tipped off');
-      World.ensurePolice(2);
-      clearMarker();
-    } else if (step.type === 'shootout') {
-      if (step.night || true) S.time = 21.5;
-      spawnEnemies();
-      step.killed = 0;
-      setMarker(-259, -259, 0xff4444);
-    }
-  }
-
-  function spawnPackage(x, z) {
-    var g = new THREE.Group();
-    var box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.9),
-      new THREE.MeshLambertMaterial({ color: 0x8a6a3a }));
-    box.position.y = 0.5; g.add(box);
-    var tape = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.62, 0.2),
-      new THREE.MeshLambertMaterial({ color: 0xd8c86a }));
-    tape.position.y = 0.5; g.add(tape);
-    g.position.set(x, 0, z);
-    scene.add(g);
-    packages.push({ mesh: g, x: x, z: z, taken: false });
-  }
-  function clearPackages() {
-    packages.forEach(function (p) { scene.remove(p.mesh); });
-    packages = [];
-  }
-
-  function spawnEnemies() {
-    var spots = [[-259, -259], [-245, -270], [-270, -245], [-250, -250]];
-    spots.forEach(function (s) {
-      var e = Entities.makePerson('enemy');
-      e.x = s[0]; e.z = s[1]; e.health = CFG.ENEMY_HEALTH;
-      e.mesh.position.set(e.x, 0, e.z);
-      scene.add(e.mesh);
-      S.enemies.push(e);
-    });
-  }
-
-  function advanceStep() {
-    var step = currentStep();
-    if (step && step.type === 'enterCar' && step.wanted) World.addWanted(step.wanted, 'Stolen car');
-    AudioSys.pickup();
-    S.mission.step++;
-    if (S.mission.step >= currentDef().steps.length) completeMission();
-    else setupStep();
-  }
-
-  function completeMission() {
-    var d = currentDef();
-    S.cash += d.reward;
-    S.stats.earned += d.reward;
-    S.stats.missionsDone++;
-    AudioSys.missionPass();
-    HUD.banner('MISSION PASSED', '+$' + d.reward + '  —  ' + d.name);
-    HUD.setObjective('Mission complete');
-    clearMarker();
-    clearPackages();
-    S.mission.running = false;
-    S.mission.between = true;
-    betweenTimer = 5;
-    Save.save();
-    if (S.mission.index >= defs.length - 1) {
-      S.mission.done = true;
-      setTimeout(function () {
-        HUD.banner('KING OF SOLMAR', 'You finished the story — free roam, taxis and sun coins remain');
-        HUD.dialogue('Nadia Sol', 'Solmar is yours now, Marco. The city never sleeps, and neither do we.');
-      }, 2500);
-    }
-  }
-
-  function update(dt) {
-    if (S.mission.between) {
-      betweenTimer -= dt;
-      if (betweenTimer <= 0) {
-        S.mission.between = false;
-        if (!S.mission.done && S.mission.index + 1 < defs.length) startMission(S.mission.index + 1);
-      }
-      return;
-    }
-    if (!S.mission.running) return;
-    var step = currentStep();
-    if (!step) return;
-    var p = S.player;
-    var d = Math.sqrt(dist2(p.x, p.z, step.x || 0, step.z || 0));
-    if (step.type === 'goto') {
-      if (d < step.r) advanceStep();
-    } else if (step.type === 'driveTo') {
-      if (!p.car) { HUD.setObjective(step.text + '  (you need a car!)'); return; }
-      if (d < step.r) advanceStep();
-    } else if (step.type === 'enterCar') {
-      if (p.car && p.car.id === step.carId) advanceStep();
-      else if (p.car) HUD.setObjective('Wrong car — find the marked one');
-    } else if (step.type === 'collect') {
-      var remaining = 0;
-      packages.forEach(function (pk) {
-        if (pk.taken) return;
-        remaining++;
-        if (dist2(p.x, p.z, pk.x, pk.z) < step.r * step.r) {
-          pk.taken = true;
-          scene.remove(pk.mesh);
-          step.got++;
-          AudioSys.coin();
-          HUD.toast('Package ' + step.got + '/3', 'good');
-          HUD.setObjective('Collect the packages (' + step.got + '/3)');
-          var next = packages.find(function (q) { return !q.taken; });
-          if (next) setMarker(next.x, next.z);
-        }
-      });
-      if (remaining === 0) advanceStep();
-    } else if (step.type === 'escape') {
-      if (S.wanted === 0) advanceStep();
-    } else if (step.type === 'shootout') {
-      var alive = S.enemies.filter(function (e) { return e.state !== 'dead'; }).length;
-      var killed = 4 - alive;
-      if (killed !== step.killed) {
-        step.killed = killed;
-        HUD.setObjective('Clear out the Vulture gang (' + killed + '/4)');
-      }
-      if (alive === 0) advanceStep();
-    }
-    if (marker) {
-      marker.rotation.y += dt * 0.8;
-      marker.userData.arrow.position.y = 3.2 + Math.sin(S.time * 8) * 0.4;
-    }
-  }
-
-  function onEnemyDown() { /* counted in update() via alive check */ }
-
-  return {
-    init: init,
-    startMission: startMission,
-    update: update,
-    active: function () { return S.mission && S.mission.running; },
-    onEnemyDown: onEnemyDown,
-    currentName: function () { var d = currentDef(); return d ? d.name : ''; },
+export function startMission(state, index) {
+  const def = MISSIONS[index];
+  if (!def) return;
+  state.mission = {
+    index,
+    def,
+    stage: 0,
+    timer: 0,
+    started: true,
   };
-})();
+  state.dialogue = { name: def.giver, text: def.intro, t: 6 };
+  state.banner = { title: def.title, subtitle: def.subtitle, t: 4 };
+  if (index === 3) {
+    // Mission 4: the heat starts now.
+    state.wanted = Math.max(state.wanted, 2);
+    state.wantedTimer = 0;
+  }
+  if (index === 5) {
+    state.clock = 21.5; // night shootout, after dark
+    spawnGang(state);
+  }
+}
+
+export function spawnGang(state) {
+  const spots = [[112, 142], [128, 158], [108, 160], [132, 140]];
+  state.gang = spots.map(([x, z], i) => ({
+    x, z, angle: 0, health: 60, alive: true, shootCd: 1 + i * 0.4, mesh: null, id: i,
+  }));
+}
+
+function playerPos(state) {
+  return state.player.car
+    ? { x: state.player.car.x, z: state.player.car.z }
+    : { x: state.player.x, z: state.player.z };
+}
+
+function near(state, target, r = 7) {
+  const p = playerPos(state);
+  return dist2(p.x, p.z, target.x, target.z) < r * r;
+}
+
+export function updateMission(state, dt) {
+  const m = state.mission;
+  if (!m || !m.started) return;
+  m.timer += dt;
+  const complete = () => {
+    state.cash += m.def.reward;
+    state.missionsDone[m.index] = true;
+    state.missionIndex = Math.min(m.index + 1, MISSIONS.length);
+    state.dialogue = { name: m.def.giver, text: m.def.outro, t: 6 };
+    state.banner = { title: 'Mission Complete', subtitle: m.def.title + '  •  +$' + m.def.reward, t: 4 };
+    state.toast = 'Saved — mission ' + (m.index + 1) + ' of 6 complete';
+    state.mission = null;
+    state.saveDirty = true;
+    state.stats.missions = (state.stats.missions || 0) + 1;
+  };
+
+  if (m.index === 0) {
+    // Stage 0: reach the plaza pickup (on foot or in a car). Stage 1: beach.
+    if (m.stage === 0 && near(state, m.def.target, 8)) {
+      m.stage = 1;
+      state.toast = 'Fare picked up — drive to the beach';
+      state.banner = { title: 'First Fare', subtitle: 'Drop the fare at the beach', t: 3 };
+    } else if (m.stage === 1 && near(state, m.def.target2, 8)) {
+      complete();
+    }
+  } else if (m.index === 1) {
+    if (state.player.car && state.player.stolen) {
+      if (near(state, m.def.target, 10)) complete();
+      else if (m.stage === 0) {
+        m.stage = 1;
+        state.toast = 'Car stolen — deliver it to the docks';
+      }
+    }
+  } else if (m.index === 2) {
+    if (m.stage === 0 && near(state, m.def.target, 7)) {
+      m.stage = 1;
+      state.toast = 'Package collected — deliver to the park';
+      state.banner = { title: 'Package Run', subtitle: 'Deliver the package to the park', t: 3 };
+    } else if (m.stage === 1 && near(state, m.def.target2, 7)) {
+      complete();
+    }
+  } else if (m.index === 3) {
+    if (state.wanted === 0) complete();
+  } else if (m.index === 4) {
+    const cp = m.def.checkpoints[m.stage];
+    if (cp && near(state, cp, 8)) {
+      m.stage += 1;
+      if (m.stage >= m.def.checkpoints.length) complete();
+      else state.toast = 'Checkpoint ' + m.stage + ' of 3 — next: ' + m.def.checkpoints[m.stage].label;
+    }
+  } else if (m.index === 5) {
+    const alive = state.gang.filter((g) => g.alive).length;
+    if (alive === 0) complete();
+  }
+}
+
+// Current beacon target for the HUD minimap + world marker.
+export function missionTarget(state) {
+  const m = state.mission;
+  if (!m) return null;
+  if (m.index === 0) return m.stage === 0 ? m.def.target : m.def.target2;
+  if (m.index === 1) return m.def.target;
+  if (m.index === 2) return m.stage === 0 ? m.def.target : m.def.target2;
+  if (m.index === 4) return m.def.checkpoints[m.stage] || null;
+  if (m.index === 5) return m.def.target;
+  return null;
+}
+
+// --- Taxi side job ---------------------------------------------------------
+// When the player drives, a fare offer appears; drive to the waiting
+// passenger, then to their destination. Fast delivery earns a speed tip.
+export function updateTaxi(state, dt) {
+  const t = state.taxi;
+  const p = playerPos(state);
+  if (!t.active) {
+    if (state.player.car) {
+      t.offerTimer -= dt;
+      if (t.offerTimer <= 0) {
+        t.active = true;
+        t.stage = 0;
+        const spots = [
+          { x: -60, z: 20, dx: 60, dz: 140 },
+          { x: 60, z: -40, dx: -90, dz: 90 },
+          { x: 0, z: 120, dx: -120, dz: -120 },
+          { x: 90, z: 60, dx: -60, dz: -160 },
+        ];
+        const s = spots[state.rng.int(0, spots.length - 1)];
+        t.pickup = { x: s.x, z: s.z };
+        t.dest = { x: s.dx, z: s.dz };
+        t.timer = 90;
+        state.toast = 'Taxi fare: passenger waiting — drive to the marker';
+      }
+    }
+    return;
+  }
+  t.timer -= dt;
+  if (t.timer <= 0) {
+    t.active = false;
+    t.offerTimer = 12;
+    state.toast = 'Fare cancelled — too slow';
+    return;
+  }
+  if (t.stage === 0) {
+    if (dist2(p.x, p.z, t.pickup.x, t.pickup.z) < 64) {
+      t.stage = 1;
+      t.timer = 90;
+      state.toast = 'Passenger aboard — drive to the destination';
+    }
+  } else if (dist2(p.x, p.z, t.dest.x, t.dest.z) < 64) {
+    const tip = t.timer > 45 ? 60 : 0;
+    const fare = TAXI_FARE + tip;
+    state.cash += fare;
+    state.stats.fares = (state.stats.fares || 0) + 1;
+    state.toast = 'Fare paid ' + '$' + fare + (tip ? ' (includes $60 speed tip)' : '');
+    t.active = false;
+    t.offerTimer = 15;
+  }
+}

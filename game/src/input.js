@@ -1,77 +1,89 @@
-// Keyboard and mouse input. Held keys are read every frame; one-shot presses
-// (confirm, pause, interact, punch, reload) are queued as flags and taken once,
-// so a press between two frames is never lost and never counted twice.
-var Input = (function () {
-  var keys = {};
-  var actions = 0;
-  var mouseDX = 0, mouseDY = 0, mouseDown = false;
-  var dragging = false, lastX = 0, lastY = 0, wheelDelta = 0;
+// Keyboard + mouse input. Actions are edge-triggered where noted (pressed()).
+// Pointer lock is requested on canvas click; the mouse orbits the camera.
+export const ACTION_CONFIRM = 'confirm';
+export const ACTION_PAUSE = 'pause';
+export const ACTION_ENTER_CAR = 'enterCar';
+export const ACTION_PUNCH = 'punch';
+export const ACTION_SHOOT = 'shoot';
+export const ACTION_HANDBRAKE = 'handbrake';
+export const ACTION_HORN = 'horn';
 
-  var ACTION_CONFIRM = 1;
-  var ACTION_PAUSE = 2;
-  var ACTION_INTERACT = 4;
-  var ACTION_PUNCH = 8;
-  var ACTION_RELOAD = 16;
+const KEYMAP = {
+  KeyW: 'up', ArrowUp: 'up',
+  KeyS: 'down', ArrowDown: 'down',
+  KeyA: 'left', ArrowLeft: 'left',
+  KeyD: 'right', ArrowRight: 'right',
+  ShiftLeft: 'run', ShiftRight: 'run',
+  KeyE: ACTION_ENTER_CAR,
+  KeyF: ACTION_PUNCH,
+  KeyP: ACTION_PAUSE,
+  Escape: ACTION_PAUSE,
+  Enter: ACTION_CONFIRM,
+  Space: ACTION_HANDBRAKE,
+  KeyH: ACTION_HORN,
+  KeyM: 'mission',
+  KeyN: 'mute',
+};
 
-  function init(canvas) {
-    window.addEventListener('keydown', function (e) {
-      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown' ||
-          e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.preventDefault();
-      if (e.repeat) return;
-      keys[e.code] = true;
-      if (e.code === 'Enter' || e.code === 'Space') actions |= ACTION_CONFIRM;
-      else if (e.code === 'KeyP' || e.code === 'Escape') actions |= ACTION_PAUSE;
-      else if (e.code === 'KeyE') actions |= ACTION_INTERACT;
-      else if (e.code === 'KeyF') actions |= ACTION_PUNCH;
-      else if (e.code === 'KeyR') actions |= ACTION_RELOAD;
-    });
-    window.addEventListener('keyup', function (e) { keys[e.code] = false; });
-    window.addEventListener('blur', function () {
-      for (var k in keys) keys[k] = false;
-      dragging = false; mouseDown = false;
-    });
-    canvas.addEventListener('pointerdown', function (e) {
-      dragging = true; lastX = e.clientX; lastY = e.clientY;
-      mouseDown = true;
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener('pointermove', function (e) {
-      if (!dragging) return;
-      mouseDX += e.clientX - lastX; mouseDY += e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-    });
-    function endDrag() { dragging = false; mouseDown = false; }
-    canvas.addEventListener('pointerup', endDrag);
-    canvas.addEventListener('pointercancel', endDrag);
-    canvas.addEventListener('wheel', function (e) { wheelDelta += e.deltaY; e.preventDefault(); }, { passive: false });
-    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+export function createInput(canvas) {
+  const held = new Set();
+  const pressed = new Set();
+  let mouseDX = 0;
+  let mouseDY = 0;
+  let wheel = 0;
+  let mouseDown = false;
+  let locked = false;
+
+  function onKeyDown(e) {
+    const action = KEYMAP[e.code];
+    if (!action) return;
+    if (e.code === 'Space') e.preventDefault();
+    if (!held.has(action)) pressed.add(action);
+    held.add(action);
   }
+  function onKeyUp(e) {
+    const action = KEYMAP[e.code];
+    if (action) held.delete(action);
+  }
+  function onMouseMove(e) {
+    if (locked) {
+      mouseDX += e.movementX || 0;
+      mouseDY += e.movementY || 0;
+    }
+  }
+  function onMouseDown(e) {
+    if (e.button === 0) {
+      mouseDown = true;
+      pressed.add(ACTION_SHOOT);
+      if (!locked && canvas.requestPointerLock) {
+        try { canvas.requestPointerLock(); } catch { /* pointer lock unavailable */ }
+      }
+    }
+  }
+  function onMouseUp(e) { if (e.button === 0) mouseDown = false; }
+  function onWheel(e) { wheel += e.deltaY; }
+  function onLockChange() { locked = document.pointerLockElement === canvas; }
+  function onBlur() { held.clear(); }
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('wheel', onWheel);
+  document.addEventListener('pointerlockchange', onLockChange);
+  window.addEventListener('blur', onBlur);
 
   return {
-    ACTION_CONFIRM: ACTION_CONFIRM,
-    ACTION_PAUSE: ACTION_PAUSE,
-    ACTION_INTERACT: ACTION_INTERACT,
-    ACTION_PUNCH: ACTION_PUNCH,
-    ACTION_RELOAD: ACTION_RELOAD,
-    init: init,
-    held: function (code) { return !!keys[code]; },
-    // WASD / arrows as a -1..1 pair, relative to the camera.
-    move: function () {
-      var x = 0, y = 0;
-      if (keys['KeyW'] || keys['ArrowUp']) y += 1;
-      if (keys['KeyS'] || keys['ArrowDown']) y -= 1;
-      if (keys['KeyA'] || keys['ArrowLeft']) x -= 1;
-      if (keys['KeyD'] || keys['ArrowRight']) x += 1;
-      return { x: x, y: y };
-    },
-    sprint: function () { return !!keys['ShiftLeft'] || !!keys['ShiftRight']; },
-    mouseDown: function () { return mouseDown; },
-    takeMouseDelta: function () {
-      var d = { x: mouseDX, y: mouseDY };
-      mouseDX = 0; mouseDY = 0;
+    is(action) { return held.has(action); },
+    pressed(action) { return pressed.has(action); },
+    mouseDown() { return mouseDown; },
+    consumeMouse() {
+      const d = { dx: mouseDX, dy: mouseDY, wheel };
+      mouseDX = 0; mouseDY = 0; wheel = 0;
       return d;
     },
-    takeWheel: function () { var d = wheelDelta; wheelDelta = 0; return d; },
-    takeActions: function () { var a = actions; actions = 0; return a; },
+    endFrame() { pressed.clear(); },
+    isLocked() { return locked; },
   };
-})();
+}

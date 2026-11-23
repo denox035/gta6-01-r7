@@ -1,136 +1,80 @@
-// Screenshot scenes behind ?shot=cover|street|chase|mission. Each one stages a
-// real game state — a car on the avenue, the plaza on foot, a police chase, a
-// mission in progress — then paints it a few times and sets window.__shotReady,
-// so the screenshot is exactly what a player sees in that moment.
-var Shots = (function () {
-  function placeCarAt(car, x, z, heading, speed) {
-    car.x = x; car.z = z; car.heading = heading; car.speed = speed || 0;
-    car.parked = false;
-    car.mesh.position.set(x, 0, z);
-    car.mesh.rotation.y = heading;
-  }
+// Screenshot scenes behind ?shot=name&seed=N. Each stages a real game state
+// (a live world, stepped forward with a scripted driver) and paints it twice,
+// then sets window.__shotReady for the screenshot driver.
+import { startMission, spawnGang } from './missions.js';
+import { updateWorld, addWanted } from './world.js';
 
-  function putPlayerInCar(car) {
-    S.player.x = car.x; S.player.z = car.z;
-    S.player.car = car; car.isPlayer = true;
-    S.player.onFoot = false;
-    S.player.mesh.visible = false;
-  }
+function fakeInput(drive) {
+  const held = new Set(drive ? ['up'] : []);
+  return {
+    is: (a) => held.has(a),
+    pressed: () => false,
+    mouseDown: () => false,
+    consumeMouse: () => ({ dx: 0, dy: 0, wheel: 0 }),
+    endFrame: () => {},
+  };
+}
 
-  function putPlayerOnFoot(x, z, heading) {
-    S.player.x = x; S.player.z = z; S.player.heading = heading;
-    S.player.onFoot = true; S.player.car = null;
-    S.player.mesh.visible = true;
-    S.player.mesh.position.set(x, 0, z);
-    S.player.mesh.rotation.y = heading;
-  }
+function stepWorld(state, audio, seconds, drive) {
+  const input = fakeInput(drive);
+  const steps = Math.floor(seconds * 60);
+  for (let i = 0; i < steps; i += 1) updateWorld(state, input, audio, 1 / 60);
+}
 
-  function cameraBehind(heading, dist, pitch) {
-    S.cameraYaw = heading + Math.PI;
-    S.cameraDist = dist || 11;
-    S.cameraPitch = pitch || 0.32;
+export function stageShot(name, state, audio) {
+  const p = state.player;
+  if (name === 'street') {
+    // On foot in the city at golden hour, traffic and peds moving.
+    state.screen = 'play';
+    state.clock = 17.5;
+    p.x = -20; p.z = 60; p.angle = 0.4;
+    state.camYaw = Math.PI * 0.95;
+    state.camPitch = 0.22; // low angle so the skyline shows
+    state.camDist = 10;
+    stepWorld(state, audio, 6, false);
+    return;
   }
-
-  function stage(name) {
-    S.screen = 'play';
-    HUD.setScreenVisible(true);
-    if (name === 'street') return stageStreet();
-    if (name === 'chase') return stageChase();
-    if (name === 'mission') return stageMission();
-    return stageCover();
+  if (name === 'chase') {
+    // Wanted 3 stars, driving fast down a main road with police on the tail.
+    state.screen = 'play';
+    state.clock = 17.0; // golden hour, so the chase reads clearly
+    const car = state.cars[0];
+    car.kind = 'player';
+    p.car = car;
+    p.stolen = true;
+    car.x = -17; car.z = -60; car.angle = 0; car.speed = 24; // on the -17 road, heading +Z
+    p.x = car.x; p.z = car.z; p.angle = car.angle;
+    addWanted(state, 3);
+    state.camYaw = 0; // camera behind the car, looking down the road
+    state.camPitch = 0.3;
+    state.camDist = 12;
+    stepWorld(state, audio, 3, true);
+    return;
   }
-
-  // The cover: driving the red sports car down the main avenue at golden hour,
-  // traffic ahead, two police cars closing in behind, two stars on the HUD.
-  function stageCover() {
-    S.time = 16.5;
-    S.cash = 1240; S.health = 92; S.ammo = 28;
-    var sport = S.cars.find(function (c) { return c.id === 'sport'; });
-    placeCarAt(sport, -120, -37, Math.PI / 2, 24);
-    putPlayerInCar(sport);
-    // Traffic on the same avenue.
-    var i = 0;
-    S.cars.forEach(function (c) {
-      if (c.isPlayer || c.police || c.parked) return;
-      if (i < 4) {
-        var x = -60 + i * 26;
-        placeCarAt(c, x, -37 + (i % 2 === 0 ? 3.5 : -3.5), Math.PI / 2, 11);
-        i++;
-      }
-    });
-    // Police closing in — one alongside ahead, one coming the other way,
-    // so the chase reads in the frame (a chase camera cannot see behind it).
-    S.wanted = 2;
-    World.ensurePolice(2);
-    placeCarAt(S.police[0], -95, -40.5, Math.PI / 2, 26);
-    if (S.police[1]) placeCarAt(S.police[1], -62, -33.5, -Math.PI / 2, 24);
-    cameraBehind(Math.PI / 2, 12, 0.3);
-    HUD.setObjective('Drive to the drop-off on the east side');
-    HUD.toast('WANTED: Grand theft auto', 'bad');
+  if (name === 'mission') {
+    // Night shootout at the docks: gang members, tracers, beacon, HUD.
+    state.screen = 'play';
+    state.clock = 21.5;
+    state.missionIndex = 5;
+    spawnGang(state);
+    startMission(state, 5);
+    p.x = 100; p.z = 130; p.angle = 0.8;
+    state.camYaw = Math.PI * 0.85;
+    state.camPitch = 0.3;
+    state.camDist = 11;
+    state.ammo = 48;
+    stepWorld(state, audio, 4, false);
+    return;
   }
-
-  // On foot in the central plaza: the fountain, palms, pedestrians, towers.
-  function stageStreet() {
-    S.time = 10.5;
-    S.cash = 350; S.health = 100; S.ammo = 36;
-    putPlayerOnFoot(0, 26, Math.PI);
-    // Pull a few pedestrians into the plaza.
-    var placed = 0;
-    S.peds.forEach(function (p) {
-      if (placed < 10 && p.state !== 'dead') {
-        p.x = -22 + placed * 5; p.z = 12 + (placed % 3) * 6;
-        p.heading = Math.PI + (placed % 2 === 0 ? 0.4 : -0.4);
-        p.mesh.position.set(p.x, 0, p.z);
-        p.mesh.rotation.y = p.heading;
-        placed++;
-      }
-    });
-    cameraBehind(Math.PI, 11, 0.22);
-    HUD.setObjective('Meet Nadia Sol at the plaza fountain');
-  }
-
-  // A four-star chase at dusk: three police cars cutting the player off ahead.
-  function stageChase() {
-    S.time = 17.2;
-    S.cash = 2680; S.health = 64; S.ammo = 12;
-    var sport = S.cars.find(function (c) { return c.id === 'sport'; });
-    // Northbound in the right-hand lane of the avenue at x = -37.
-    placeCarAt(sport, -33.5, 150, Math.PI, 30);
-    putPlayerInCar(sport);
-    S.wanted = 4;
-    World.ensurePolice(4);
-    var spots = [[-33.5, 120, 0], [-40.5, 100, 0], [-26, 135, Math.PI]];
-    S.police.forEach(function (pc, i) {
-      if (spots[i]) placeCarAt(pc, spots[i][0], spots[i][1], spots[i][2], 32);
-    });
-    World.spawnBurst(-33.5, 1, 158, 0x888888, 12, 3);
-    cameraBehind(Math.PI, 13, 0.3);
-    HUD.setObjective('Lose the cops — get your wanted level to zero');
-    HUD.toast('WANTED: Evading arrest', 'bad');
-  }
-
-  // A mission in progress: The Getaway, driving Nadia's car to the docks.
-  function stageMission() {
-    S.time = 16.5;
-    S.cash = 1975; S.health = 88; S.ammo = 24;
-    var teal = S.cars.find(function (c) { return c.id === 'teal'; });
-    // Southbound on the avenue at x = 185, toward the docks and the sea.
-    placeCarAt(teal, 181.5, 111, 0, 20);
-    putPlayerInCar(teal);
-    S.mission.index = 4; S.mission.step = 1; S.mission.running = true;
-    HUD.setObjective('Reach the docks — lose the cops if you can');
-    HUD.dialogue('Nadia Sol', 'Three stars and counting. Drive like the whole city is behind you — because it is.');
-    // Rebuild the mission marker at the docks by staging the step directly.
-    var marker = Entities.makeMarkerMesh(0xffd23e);
-    marker.position.set(296, 0, 296);
-    Render.scene().add(marker);
-    S.missionTarget = { x: 296, z: 296 };
-    S.wanted = 3;
-    World.ensurePolice(3);
-    placeCarAt(S.police[0], 188.5, 60, Math.PI, 24);
-    if (S.police[1]) placeCarAt(S.police[1], 181.5, 150, 0, 24);
-    cameraBehind(0, 12, 0.3);
-  }
-
-  return { stage: stage };
-})();
+  // Default: 'start' — title scene, plaza and fountain at golden hour.
+  state.screen = 'title';
+  state.clock = 17.5;
+  p.x = 6; p.z = 34; p.angle = Math.PI;
+  state.camYaw = Math.PI;
+  state.camPitch = 0.18; // low angle: skyline over the plaza
+  state.camDist = 12;
+  stepWorld(state, audio, 5, false);
+  // Show the real title screen over the staged city, as the player sees it.
+  const titleEl = document.getElementById('screen-title');
+  if (titleEl) titleEl.style.display = 'flex';
+}
