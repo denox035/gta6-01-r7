@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOLMAR — Streets of Gold</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1026;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #fff; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* --- HUD --- */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  .panel { background: rgba(10, 14, 22, 0.62); border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px; backdrop-filter: blur(2px); }
+  #hud-top-left { position: absolute; top: 14px; left: 14px; padding: 10px 14px; min-width: 210px; }
+  #hud-cash { font-size: 26px; font-weight: 800; color: #7ee787; letter-spacing: 0.5px; }
+  #hud-health-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  #hud-health-bar { flex: 1; height: 12px; background: rgba(255,255,255,0.18); border-radius: 6px; overflow: hidden; }
+  #hud-health-fill { height: 100%; width: 100%; background: #3fae5a; border-radius: 6px; }
+  #hud-health-text { font-size: 13px; font-weight: 700; min-width: 26px; text-align: right; }
+  #hud-ammo { margin-top: 6px; font-size: 13px; font-weight: 700; color: #ffd23e; letter-spacing: 1px; }
+  #hud-top-right { position: absolute; top: 14px; right: 14px; padding: 10px 14px; text-align: right; }
+  #hud-stars { font-size: 24px; letter-spacing: 3px; color: #ffd23e; text-shadow: 0 0 8px rgba(255,210,62,0.5); }
+  #hud-clock { font-size: 14px; font-weight: 600; color: #dfe8f2; margin-top: 2px; }
+  #hud-objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    padding: 9px 18px; font-size: 15px; font-weight: 600; color: #ffe9a8; max-width: 46vw; text-align: center; }
+  #minimap-wrap { position: absolute; left: 14px; bottom: 14px; padding: 6px; }
+  #minimap { display: block; width: 220px; height: 220px; border-radius: 8px; }
+  #hud-speed { position: absolute; right: 16px; bottom: 16px; padding: 8px 16px;
+    font-size: 26px; font-weight: 800; color: #fff; display: none; }
+  #hud-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    font-size: 13px; color: rgba(255,255,255,0.85); text-shadow: 0 1px 3px #000; white-space: nowrap; }
+  #toasts { position: absolute; top: 110px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .toast { padding: 7px 16px; border-radius: 20px; font-size: 14px; font-weight: 600;
+    background: rgba(10,14,22,0.75); border: 1px solid rgba(255,255,255,0.2);
+    transition: opacity 0.4s; white-space: nowrap; }
+  .toast.good { color: #7ee787; border-color: #3fae5a; }
+  .toast.bad { color: #ff9a9a; border-color: #d83838; }
+  .toast.info { color: #bfe3ff; border-color: #4a90c8; }
+  #banner { position: absolute; top: 26%; left: 50%; transform: translateX(-50%);
+    text-align: center; display: none; }
+  #banner-title { font-size: 52px; font-weight: 900; letter-spacing: 4px; color: #ffd23e;
+    text-shadow: 0 3px 0 #7a4a00, 0 6px 24px rgba(0,0,0,0.7); }
+  #banner-sub { font-size: 19px; font-weight: 600; color: #fff; text-shadow: 0 2px 8px #000; margin-top: 4px; }
+  #dialogue { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+    width: min(620px, 80vw); padding: 12px 18px; display: none; }
+  #dialogue-name { font-size: 13px; font-weight: 800; color: #ffd23e; letter-spacing: 1px; text-transform: uppercase; }
+  #dialogue-text { font-size: 16px; line-height: 1.45; margin-top: 3px; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(200,0,0,0.55) 100%);
+    transition: opacity 0.25s; }
+  #flash { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0; background: #fff; }
+
+  /* --- Screens --- */
+  .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: linear-gradient(180deg, rgba(8,12,24,0.55) 0%, rgba(8,12,24,0.82) 100%); }
+  .game-title { font-size: 84px; font-weight: 900; letter-spacing: 10px; color: #ffd23e;
+    text-shadow: 0 4px 0 #7a4a00, 0 10px 40px rgba(0,0,0,0.8); margin: 0; }
+  .game-sub { font-size: 20px; font-weight: 600; color: #ffe9a8; margin: 8px 0 26px; letter-spacing: 2px; }
+  .menu-btn { pointer-events: auto; display: block; width: 300px; margin: 8px auto; padding: 13px 20px;
+    font-size: 17px; font-weight: 700; color: #fff; background: rgba(255,210,62,0.16);
+    border: 2px solid #ffd23e; border-radius: 10px; cursor: pointer; letter-spacing: 1px; }
+  .menu-btn:hover { background: rgba(255,210,62,0.35); }
+  .menu-btn.secondary { border-color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.08); }
+  .controls { margin-top: 26px; font-size: 14px; line-height: 1.9; color: rgba(255,255,255,0.85); }
+  .controls b { color: #ffd23e; }
+  #pause-screen, #end-screen { display: none; }
+  .screen h2 { font-size: 46px; font-weight: 900; letter-spacing: 6px; margin: 0 0 10px; color: #ffd23e; }
+  .screen p { font-size: 17px; color: #dfe8f2; max-width: 520px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Solmar: an open-world crime game. Drive, explore the city, take missions."></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud">
+  <div id="hud-top-left" class="panel">
+    <div id="hud-cash">$0</div>
+    <div id="hud-health-row">
+      <div id="hud-health-bar"><div id="hud-health-fill"></div></div>
+      <div id="hud-health-text">100</div>
+    </div>
+    <div id="hud-ammo"></div>
+  </div>
+  <div id="hud-top-right" class="panel">
+    <div id="hud-stars">☆☆☆☆☆</div>
+    <div id="hud-clock">4:30 PM · Solmar</div>
+  </div>
+  <div id="hud-objective" class="panel"></div>
+  <div id="minimap-wrap" class="panel"><canvas id="minimap" width="220" height="220"></canvas></div>
+  <div id="hud-speed" class="panel">0 km/h</div>
+  <div id="hud-hint"></div>
+  <div id="toasts"></div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="dialogue" class="panel"><div id="dialogue-name"></div><div id="dialogue-text"></div></div>
+</div>
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<div id="title-screen" class="screen">
+  <h1 class="game-title">SOLMAR</h1>
+  <div class="game-sub">STREETS OF GOLD &mdash; AN OPEN-WORLD CRIME STORY</div>
+  <button id="btn-new" class="menu-btn">NEW GAME</button>
+  <button id="btn-continue" class="menu-btn secondary">CONTINUE</button>
+  <button id="btn-mute" class="menu-btn secondary">Sound: ON</button>
+  <div class="controls">
+    <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>Mouse drag</b> camera &nbsp;·&nbsp; <b>Wheel</b> zoom<br>
+    <b>E</b> enter / steal car &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>F</b> punch &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>P</b> pause<br>
+    Steal cars, outrun the Solmar PD, run missions for Nadia Sol, drive taxis and find all 20 sun coins.
+  </div>
+</div>
+
+<div id="pause-screen" class="screen">
+  <h2>PAUSED</h2>
+  <p>The city waits for no one — except right now.</p>
+  <button id="btn-resume" class="menu-btn">RESUME</button>
+  <button id="btn-save" class="menu-btn secondary">SAVE GAME</button>
+  <button id="btn-quit" class="menu-btn secondary">QUIT TO TITLE</button>
+</div>
+
+<div id="end-screen" class="screen">
+  <h2 id="end-title">WASTED</h2>
+  <p id="end-text"></p>
+  <button id="btn-respawn" class="menu-btn">GET BACK ON YOUR FEET</button>
+</div>
+
+<script src="./vendor/three.min.js"></script>
+<script src="./src/config.js"></script>
+<script src="./src/random.js"></script>
+<script src="./src/audio.js"></script>
+<script src="./src/input.js"></script>
+<script src="./src/city.js"></script>
+<script src="./src/entities.js"></script>
+<script src="./src/world.js"></script>
+<script src="./src/missions.js"></script>
+<script src="./src/hud.js"></script>
+<script src="./src/save.js"></script>
+<script src="./src/render.js"></script>
+<script src="./src/shots.js"></script>
+<script src="./src/main.js"></script>
+</body>
+</html>
