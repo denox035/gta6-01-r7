@@ -5,7 +5,7 @@
 [![reward](https://make.fun/badge/gta6-01/denox035/gta6-01-r7/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
 An original 3D open-world crime game for the
-[make.fun GTA 6 bounty](https://make.fun/competitions/gta6-01): a sun-soaked
+[make.fun GTA 6 bounty](https://make.fun/bounty/gta6-01): a sun-soaked
 coastal city to explore on foot and by car, with traffic, pedestrians, cars to
 steal, a wanted level and police who respond, six story missions, combat, a
 HUD with a live minimap, and a save system — all playable offline in desktop
