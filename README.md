@@ -1,8 +1,8 @@
 # SOLMAR — Streets of Gold
 
-[![make.fun](https://make.fun/badge/competition/gta6-01)](https://make.fun/competitions/gta6-01)
-[![make.fun entry](https://make.fun/badge/entry/gta6-01)](https://make.fun/competitions/gta6-01)
-[![Built with make.fun](https://make.fun/badge/built-with)](https://make.fun)
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/denox035/gta6-01-r7/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/denox035/gta6-01-r7/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
 An original 3D open-world crime game for the
 [make.fun GTA 6 bounty](https://make.fun/competitions/gta6-01): a sun-soaked
